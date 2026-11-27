@@ -9,8 +9,8 @@ BROWN = (120, 72, 30)
 BROWN_LIGHT = (150, 95, 45)
 
 
-def draw_poop(screen, x, y):
-    s = POOP_SIZE
+def draw_poop(screen, x, y, size=POOP_SIZE):
+    s = size
     # 아래에서 위로 점점 작아지는 세 덩어리
     pygame.draw.ellipse(screen, BROWN, (x, y + s * 0.55, s, s * 0.45))
     pygame.draw.ellipse(screen, BROWN_LIGHT, (x + s * 0.15, y + s * 0.3, s * 0.7, s * 0.4))
@@ -31,9 +31,9 @@ def draw(screen, game, font):
     screen.fill(SKY)
     pygame.draw.rect(screen, GROUND, (0, HEIGHT - 10, WIDTH, 10))
     for poop in game.poops:
-        draw_poop(screen, poop.x, poop.y)
+        draw_poop(screen, poop.x, poop.y, poop.size)
     for player in game.players:
         if player.alive:
             draw_player(screen, player)
     best = max(p.score for p in game.players)
-    screen.blit(font.render(f"SCORE {best}", True, (0, 0, 0)), (10, 10))
+    screen.blit(font.render(f"STAGE {game.stage()}   SCORE {best}", True, (0, 0, 0)), (10, 10))

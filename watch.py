@@ -72,11 +72,11 @@ def run(brain, vs):
         screen.fill(SKY)
         pygame.draw.rect(screen, GROUND, (0, HEIGHT - 10, WIDTH, 10))
         for poop in game.poops:
-            draw_poop(screen, poop.x, poop.y)
+            draw_poop(screen, poop.x, poop.y, poop.size)
         if ai.alive:
             draw_sensors(screen, pygame, ai, obs)
             draw_player(screen, ai, color=(230, 60, 60))
-        texts = [f"AI {ai.score}"]
+        texts = [f"STAGE {game.stage()}", f"AI {ai.score}"]
         if vs:
             me = game.players[1]
             if me.alive:
