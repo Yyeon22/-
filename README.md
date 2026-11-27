@@ -3,7 +3,16 @@
 직접 만든 똥피하기 게임을, 규칙을 하나도 모르는 AI가 **유전 알고리즘**으로 스스로 배워서 깨는 프로젝트.
 신경망과 유전 알고리즘은 라이브러리 없이 numpy로 직접 구현했다.
 
-## 설치
+## 🌐 웹 버전 (Streamlit) — 설치 없이 브라우저로 보기
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+탭 4개: 학습된 AI 보기 / 학습 과정(1세대 vs 직접 학습시키기) / AI와 대결 / 결과.
+게임 규칙·AI·학습은 파이썬이 계산하고, 브라우저는 그림만 그린다.
+'AI와 대결' 탭만 실시간 조작을 위해 같은 규칙과 학습된 가중치를 JavaScript로 옮겨 브라우저에서 돌린다.
+
+## 내 컴퓨터용 (pygame) 설치
 ```bash
 pip install pygame numpy matplotlib
 ```
@@ -11,7 +20,10 @@ pip install pygame numpy matplotlib
 ## 파일
 | 파일 | 역할 |
 |---|---|
-| `game.py` | 게임 규칙 (여러 명이 같은 똥을 동시에 피할 수 있음) |
+| `game.py` | 게임 규칙 (여러 명이 같은 똥을 동시에 피할 수 있음, pygame 불필요) |
+| `draw.py` | pygame 화면 그리기 |
+| `app.py` | Streamlit 웹 앱 |
+| `web_view.py` | 웹 화면용 HTML/JavaScript (재생 화면, 실시간 대결) |
 | `play.py` | 사람이 직접 플레이 |
 | `brain.py` | AI의 눈(센서 9개)과 뇌(작은 신경망) |
 | `train.py` | 유전 알고리즘으로 학습 |

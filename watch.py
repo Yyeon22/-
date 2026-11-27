@@ -13,8 +13,7 @@ import sys
 import numpy as np
 
 from brain import SENSOR_OFFSETS, Brain, observe
-from game import (FPS, HEIGHT, LEFT, PLAYER_W, RIGHT, STAY, WIDTH, Game,
-                  GROUND, SKY, draw_player, draw_poop)
+from game import FPS, HEIGHT, LEFT, PLAYER_W, RIGHT, STAY, WIDTH, Game
 
 
 def test(brain, n_games):
@@ -38,6 +37,8 @@ def draw_sensors(screen, pygame, player, obs):
 
 def run(brain, vs):
     import pygame
+
+    from draw import GROUND, SKY, draw_player, draw_poop
 
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))

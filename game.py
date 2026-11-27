@@ -1,13 +1,11 @@
 """
-똥피하기 게임의 '규칙'만 담은 파일.
+똥피하기 게임의 '규칙'만 담은 파일. (pygame 없이 동작한다)
 
-화면 그리기(draw)와 규칙(Game)을 나눠 둔 이유:
-나중에 AI 100명이 동시에 플레이할 때는 화면을 그리지 않고
-규칙만 빠르게 돌려서 학습시키기 위해서다.
+화면 그리기(draw.py)와 규칙(Game)을 나눠 둔 이유:
+1) AI 100명이 동시에 플레이할 때는 화면 없이 규칙만 빠르게 돌려서 학습시키기 위해
+2) 웹(Streamlit) 서버처럼 화면이 없는 곳에서도 그대로 쓰기 위해
 """
 import random
-
-import pygame
 
 # ---------------- 게임 설정 ----------------
 WIDTH, HEIGHT = 480, 640       # 화면 크기
@@ -18,6 +16,18 @@ FPS = 60
 
 # 행동 번호 (AI도 이 번호로 행동을 고른다)
 STAY, LEFT, RIGHT = 0, 1, 2
+
+
+def box(x, y, w, h):
+    """판정 상자 (x, y, 너비, 높이). 소수점은 버린다."""
+    return int(x), int(y), int(w), int(h)
+
+
+def overlaps(a, b):
+    """두 상자가 겹치면 True (테두리가 맞닿기만 한 것은 충돌이 아님)"""
+    ax, ay, aw, ah = a
+    bx, by, bw, bh = b
+    return ax < bx + bw and bx < ax + aw and ay < by + bh and by < ay + ah
 
 
 class Player:
@@ -37,7 +47,7 @@ class Player:
 
     def hitbox(self):
         # 그림보다 판정을 조금 작게 해서 억울한 죽음을 줄인다
-        return pygame.Rect(self.x + 6, self.y + 8, PLAYER_W - 12, PLAYER_H - 8)
+        return box(self.x + 6, self.y + 8, PLAYER_W - 12, PLAYER_H - 8)
 
 
 class Poop:
@@ -50,7 +60,7 @@ class Poop:
         self.y += self.speed
 
     def hitbox(self):
-        return pygame.Rect(self.x + 4, self.y + 6, POOP_SIZE - 8, POOP_SIZE - 8)
+        return box(self.x + 4, self.y + 6, POOP_SIZE - 8, POOP_SIZE - 8)
 
 
 class Game:
@@ -84,52 +94,16 @@ class Game:
         self.poops = [p for p in self.poops if p.y < HEIGHT]
 
         # 3) 플레이어 움직이기 + 충돌 검사
+        poop_boxes = [p.hitbox() for p in self.poops]
         for player, action in zip(self.players, actions):
             if not player.alive:
                 continue
             player.move(action)
-            box = player.hitbox()
-            if any(box.colliderect(p.hitbox()) for p in self.poops):
+            me = player.hitbox()
+            if any(overlaps(me, b) for b in poop_boxes):
                 player.alive = False
             else:
                 player.score += 1
 
     def all_dead(self):
         return not any(p.alive for p in self.players)
-
-
-# ---------------- 그림 그리기 (직접 그린 도형) ----------------
-SKY = (200, 230, 255)
-GROUND = (120, 180, 90)
-BROWN = (120, 72, 30)
-BROWN_LIGHT = (150, 95, 45)
-
-
-def draw_poop(screen, x, y):
-    s = POOP_SIZE
-    # 아래에서 위로 점점 작아지는 세 덩어리
-    pygame.draw.ellipse(screen, BROWN, (x, y + s * 0.55, s, s * 0.45))
-    pygame.draw.ellipse(screen, BROWN_LIGHT, (x + s * 0.15, y + s * 0.3, s * 0.7, s * 0.4))
-    pygame.draw.ellipse(screen, BROWN, (x + s * 0.3, y + s * 0.08, s * 0.4, s * 0.32))
-
-
-def draw_player(screen, player, color=(255, 200, 60), alpha=255):
-    surf = pygame.Surface((PLAYER_W, PLAYER_H), pygame.SRCALPHA)
-    c = (*color, alpha)
-    pygame.draw.circle(surf, c, (PLAYER_W // 2, 12), 11)                     # 머리
-    pygame.draw.rect(surf, c, (8, 22, PLAYER_W - 16, PLAYER_H - 22), border_radius=6)  # 몸
-    pygame.draw.circle(surf, (0, 0, 0, alpha), (PLAYER_W // 2 - 4, 11), 2)   # 눈
-    pygame.draw.circle(surf, (0, 0, 0, alpha), (PLAYER_W // 2 + 4, 11), 2)
-    screen.blit(surf, (player.x, player.y))
-
-
-def draw(screen, game, font):
-    screen.fill(SKY)
-    pygame.draw.rect(screen, GROUND, (0, HEIGHT - 10, WIDTH, 10))
-    for poop in game.poops:
-        draw_poop(screen, poop.x, poop.y)
-    for player in game.players:
-        if player.alive:
-            draw_player(screen, player)
-    best = max(p.score for p in game.players)
-    screen.blit(font.render(f"SCORE {best}", True, (0, 0, 0)), (10, 10))
