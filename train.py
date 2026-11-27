@@ -55,7 +55,8 @@ def make_viewer():
     """--show 옵션일 때 쓰는 화면. ↑↓로 속도 조절, ESC로 중단(저장됨)."""
     import pygame
 
-    from game import WIDTH, HEIGHT, draw_player, draw_poop, SKY, GROUND
+    from draw import GROUND, SKY, draw_player, draw_poop
+    from game import HEIGHT, WIDTH
 
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))

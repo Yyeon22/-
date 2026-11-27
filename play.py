@@ -6,7 +6,8 @@ import sys
 
 import pygame
 
-from game import FPS, HEIGHT, LEFT, RIGHT, STAY, WIDTH, Game, draw
+from draw import draw
+from game import FPS, HEIGHT, LEFT, RIGHT, STAY, WIDTH, Game
 
 
 def main():
