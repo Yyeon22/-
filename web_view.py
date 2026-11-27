@@ -1,10 +1,9 @@
 """
 웹 화면(브라우저)에서 게임을 그리는 HTML/JavaScript를 만든다. Streamlit 앱(app.py)에서 사용.
 
-- replay_html: 파이썬이 이미 계산해 둔 게임 기록을 애니메이션으로 '재생'만 한다.
-               (AI의 판단과 게임 규칙은 전부 파이썬 쪽 game.py / brain.py가 계산)
-- live_html:   키보드로 실시간 플레이해야 해서 브라우저 안에서 직접 돌아가는 버전.
-               game.py의 규칙과 brain.py의 신경망 계산을 JavaScript로 옮겨 적었다.
+키보드로 실시간 플레이해야 해서 게임이 브라우저 안에서 직접 돌아간다.
+game.py의 규칙과 brain.py의 신경망 계산을 JavaScript로 옮겨 적었고,
+AI의 뇌(가중치)는 파이썬으로 학습시킨 results/run/best_brain.npz를 그대로 쓴다.
 """
 import json
 
@@ -83,54 +82,6 @@ __SCRIPT__
 def _page(body, script):
     common = COMMON.replace("__CONSTS__", json.dumps(CONSTS))
     return PAGE.replace("__BODY__", body).replace("__COMMON__", common).replace("__SCRIPT__", script)
-
-
-REPLAY_SCRIPT = r"""
-const D = __DATA__;
-let i = 0, playing = true, speed = 1;
-const many = D.frames.length && D.frames[0].a.length > 1;
-function render() {
-  const f = D.frames[Math.min(i, D.frames.length - 1)];
-  background();
-  for (let k = 0; k < f.p.length; k += 2) drawPoop(f.p[k], f.p[k + 1]);
-  let alive = 0;
-  const py = C.H - C.PH - 10;
-  f.a.forEach((x, n) => {
-    if (x < 0) return;
-    alive++;
-    if (n > 0) drawPlayer(x, py, '#ffc83c', many ? 0.35 : 1);
-  });
-  if (f.a[0] >= 0) {
-    if (f.s) drawSensors(f.a[0], py, f.s);
-    drawPlayer(f.a[0], py, D.firstColor, 1);
-  }
-  const lines = [`${D.title}`, `시간 ${(Math.min(i + 1, D.frames.length) / 60).toFixed(1)}초`];
-  if (many) lines.push(`살아남은 AI ${alive} / ${f.a.length}`);
-  hud(lines);
-  if (i >= D.frames.length - 1) banner(D.endText, '다시 보기를 누르세요');
-}
-function tick() {
-  if (playing && i < D.frames.length - 1) i = Math.min(D.frames.length - 1, i + speed);
-  render(); requestAnimationFrame(tick);
-}
-document.getElementById('play').onclick = e => { playing = !playing; e.target.textContent = playing ? '⏸ 멈춤' : '▶ 재생'; };
-document.getElementById('restart').onclick = () => { i = 0; playing = true; document.getElementById('play').textContent = '⏸ 멈춤'; };
-document.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => {
-  speed = Number(b.dataset.speed);
-  document.querySelectorAll('[data-speed]').forEach(x => x.classList.toggle('on', x === b));
-});
-tick();
-"""
-
-REPLAY_BODY = """<canvas id="cv" width="480" height="640"></canvas>
-<div class="bar"><button id="play">⏸ 멈춤</button><button id="restart">⟲ 다시 보기</button>
-<button data-speed="1" class="on">x1</button><button data-speed="2">x2</button>
-<button data-speed="4">x4</button><button data-speed="8">x8</button></div>"""
-
-
-def replay_html(frames, title, end_text, first_color="#e63c3c"):
-    data = {"frames": frames, "title": title, "endText": end_text, "firstColor": first_color}
-    return _page(REPLAY_BODY, REPLAY_SCRIPT.replace("__DATA__", json.dumps(data, separators=(",", ":"))))
 
 
 LIVE_SCRIPT = r"""
