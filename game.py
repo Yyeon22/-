@@ -11,8 +11,16 @@ import random
 WIDTH, HEIGHT = 480, 640       # 화면 크기
 PLAYER_W, PLAYER_H = 36, 44    # 캐릭터 크기
 PLAYER_SPEED = 7               # 한 프레임에 움직이는 거리
-POOP_SIZE = 30                 # 똥 크기
 FPS = 60
+
+# 스테이지: 10초마다 한 단계씩 올라가며 똥이 커지고, 빨라지고, 자주 떨어진다
+STAGE_FRAMES = 600             # 한 스테이지 길이 (600프레임 = 10초)
+POOP_SIZE = 30                 # 1스테이지 똥 크기
+POOP_GROW = 8                  # 스테이지마다 커지는 크기
+POOP_MAX = 70                  # 똥 최대 크기
+POOP_SIZE_JITTER = 0.15        # 똥마다 크기 ±15% 랜덤
+SPAWN_START, SPAWN_STEP, SPAWN_MIN = 22, 3, 5        # 똥 나오는 간격(프레임)
+SPEED_START, SPEED_STEP, SPEED_RANDOM = 4.5, 0.7, 2  # 똥 떨어지는 속도
 
 # 행동 번호 (AI도 이 번호로 행동을 고른다)
 STAY, LEFT, RIGHT = 0, 1, 2
@@ -50,17 +58,23 @@ class Player:
         return box(self.x + 6, self.y + 8, PLAYER_W - 12, PLAYER_H - 8)
 
 
+def poop_hit_dist(size):
+    """똥 중심과 내 중심의 가로 거리가 이보다 가까우면 부딪힌다 (판정 상자 너비의 절반끼리 더한 값)"""
+    return ((PLAYER_W - 12) + (size - 8)) / 2
+
+
 class Poop:
-    def __init__(self, x, speed):
+    def __init__(self, x, speed, size=POOP_SIZE):
         self.x = x
-        self.y = -POOP_SIZE
+        self.size = size
+        self.y = -size
         self.speed = speed
 
     def update(self):
         self.y += self.speed
 
     def hitbox(self):
-        return box(self.x + 4, self.y + 6, POOP_SIZE - 8, POOP_SIZE - 8)
+        return box(self.x + 4, self.y + 6, self.size - 8, self.size - 8)
 
 
 class Game:
@@ -72,12 +86,19 @@ class Game:
         self.poops = []
         self.frame = 0
 
-    # 시간이 지날수록 어려워진다
+    # 스테이지가 올라갈수록 어려워진다
+    def stage(self):
+        return self.frame // STAGE_FRAMES + 1        # 1스테이지부터 시작
+
     def spawn_interval(self):
-        return max(6, 30 - self.frame // 300)        # 똥이 나오는 간격(프레임)
+        return max(SPAWN_MIN, SPAWN_START - SPAWN_STEP * (self.stage() - 1))   # 똥이 나오는 간격(프레임)
 
     def poop_speed(self):
-        return 4 + self.frame / 900 + self.rng.random() * 2
+        return SPEED_START + SPEED_STEP * (self.stage() - 1) + self.rng.random() * SPEED_RANDOM
+
+    def poop_size(self):
+        base = min(POOP_MAX, POOP_SIZE + POOP_GROW * (self.stage() - 1))
+        return base * self.rng.uniform(1 - POOP_SIZE_JITTER, 1 + POOP_SIZE_JITTER)
 
     def step(self, actions):
         """actions: 플레이어마다 행동 번호 하나씩 (STAY/LEFT/RIGHT)"""
@@ -85,8 +106,9 @@ class Game:
 
         # 1) 새 똥 만들기
         if self.frame % self.spawn_interval() == 0:
-            x = self.rng.uniform(0, WIDTH - POOP_SIZE)
-            self.poops.append(Poop(x, self.poop_speed()))
+            size = self.poop_size()
+            x = self.rng.uniform(0, WIDTH - size)
+            self.poops.append(Poop(x, self.poop_speed(), size))
 
         # 2) 똥 떨어뜨리기, 바닥에 닿은 똥 지우기
         for poop in self.poops:

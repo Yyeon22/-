@@ -8,7 +8,7 @@ AI의 '눈'(observe)과 '뇌'(Brain).
 """
 import numpy as np
 
-from game import PLAYER_W, POOP_SIZE, WIDTH
+from game import PLAYER_W, POOP_SIZE, WIDTH, poop_hit_dist
 
 #   AI의 눈 = 내 위치를 기준으로 좌우에 늘어선 센서 9개
 #
@@ -19,7 +19,7 @@ from game import PLAYER_W, POOP_SIZE, WIDTH
 #   위험도 1 = 이 칸에 곧 똥이 떨어짐 (또는 벽 밖이라 갈 수 없음)
 #   위험도 0 = 이 칸은 당분간 안전
 SENSOR_OFFSETS = [-120, -90, -60, -30, 0, 30, 60, 90, 120]   # 센서 위치 (픽셀)
-HIT_DIST = 23           # 똥 중심과 내 중심이 이보다 가까우면 부딪힌다 (판정 상자 크기에서 계산)
+HIT_DIST = poop_hit_dist(POOP_SIZE)   # 1스테이지 똥 기준 충돌 거리 (똥이 커지면 똥마다 다시 계산)
 LOOK_AHEAD = 60         # 몇 프레임 뒤까지 내다볼지 (60프레임 = 1초)
 
 N_INPUTS = 1 + len(SENSOR_OFFSETS)     # 내 위치 1개 + 센서 9개
@@ -41,11 +41,42 @@ def observe(game, player):
         for p in game.poops:
             if p.y > player.y + 10:                    # 이미 지나간 똥은 무시
                 continue
-            if abs(p.x + POOP_SIZE / 2 - sx) < HIT_DIST:
+            if abs(p.x + p.size / 2 - sx) < poop_hit_dist(p.size):   # 큰 똥일수록 넓은 범위가 위험
                 frames_left = max(0.0, (player.y - p.y) / p.speed)
                 soonest = min(soonest, frames_left)
         obs.append(1 - soonest / LOOK_AHEAD)
     return np.array(obs)
+
+
+def observe_many(game, players):
+    """observe()와 똑같은 계산을 여러 플레이어에 대해 numpy로 한꺼번에 한다 (학습 속도용).
+    결과: (플레이어 수, N_INPUTS) 배열"""
+    pyl = players[0].y                                  # 플레이어는 모두 같은 높이에 있다
+    px = np.array([p.x for p in players]) + PLAYER_W / 2
+    sx = px[:, None] + np.array(SENSOR_OFFSETS)[None, :]          # (플레이어, 센서)
+    soonest = np.full(sx.shape, float(LOOK_AHEAD))
+    ahead = [p for p in game.poops if p.y <= pyl + 10]           # 아직 안 지나간 똥만
+    if ahead:
+        cx = np.array([p.x + p.size / 2 for p in ahead])
+        hit_dist = np.array([poop_hit_dist(p.size) for p in ahead])
+        frames_left = np.array([max(0.0, (pyl - p.y) / p.speed) for p in ahead])
+        hit = np.abs(cx[None, None, :] - sx[:, :, None]) < hit_dist  # (플레이어, 센서, 똥)
+        soonest = np.minimum(soonest, np.where(hit, frames_left, np.inf).min(axis=2))
+    danger = 1 - soonest / LOOK_AHEAD
+    danger[(sx < PLAYER_W / 2) | (sx > WIDTH - PLAYER_W / 2)] = 1.0  # 벽 밖
+    return np.column_stack([px / WIDTH * 2 - 1, danger])
+
+
+def stack_weights(brains):
+    """뇌 여러 개의 가중치를 쌓아 act_many()에서 한 번에 계산할 수 있게 한다."""
+    return {k: np.stack([b.w[k] for b in brains]) for k in brains[0].w}
+
+
+def act_many(stacked, obs):
+    """Brain.act()를 여러 뇌에 대해 한꺼번에. stacked는 stack_weights()의 결과 (obs와 같은 순서)"""
+    hidden = np.tanh(np.einsum("mi,mij->mj", obs, stacked["w1"]) + stacked["b1"])
+    out = np.einsum("mj,mjk->mk", hidden, stacked["w2"]) + stacked["b2"]
+    return out.argmax(axis=1)
 
 
 class Brain:

@@ -11,26 +11,29 @@ import sys
 
 import matplotlib.pyplot as plt
 
-RANDOM_BASELINE = 371     # 무작위로 움직일 때 평균 생존 프레임 (직접 측정한 값)
+RANDOM_BASELINE = 253     # 무작위로 움직일 때 평균 생존 프레임 (스테이지 규칙에서 1000명 직접 측정한 값)
 
 
 def read_log(name):
     with open(os.path.join("results", name, "log.csv")) as f:
         rows = list(csv.DictReader(f))
     gens = [int(r["generation"]) for r in rows]
-    return gens, [float(r["best"]) for r in rows], [float(r["average"]) for r in rows]
+    val = [float(r["validation"]) for r in rows] if rows and "validation" in rows[0] else None
+    return gens, [float(r["best"]) for r in rows], [float(r["average"]) for r in rows], val
 
 
 def main():
     names = sys.argv[1:] or ["run"]
     plt.figure(figsize=(8, 5))
     if len(names) == 1:
-        gens, best, avg = read_log(names[0])
+        gens, best, avg, val = read_log(names[0])
         plt.plot(gens, best, label="1st place", color="#d33")
         plt.plot(gens, avg, label="Average", color="#36c")
+        if val:
+            plt.plot(gens, val, label="Top AI on unseen games", color="#2a2", alpha=0.8)
     else:
         for name in names:
-            gens, _, avg = read_log(name)
+            gens, _, avg, _ = read_log(name)
             plt.plot(gens, avg, label=name)
     plt.axhline(RANDOM_BASELINE, ls="--", color="gray", label="Random moves")
     plt.xlabel("Generation")

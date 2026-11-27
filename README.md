@@ -9,6 +9,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 혼자 하기 / 학습된 AI와 대결하기.
+10초마다 스테이지가 올라가며 똥이 커지고(30 → 최대 70), 빨라지고, 더 자주 떨어진다. 설정값은 `game.py` 맨 위에 있다.
 실시간 조작을 위해 게임 규칙과 학습된 AI의 가중치를 JavaScript로 옮겨 브라우저에서 돌린다.
 
 ## 내 컴퓨터용 (pygame) 설치
@@ -25,7 +26,7 @@ pip install pygame numpy matplotlib
 | `web_view.py` | 웹 게임 화면 (HTML/JavaScript) |
 | `play.py` | 사람이 직접 플레이 |
 | `brain.py` | AI의 눈(센서 9개)과 뇌(작은 신경망) |
-| `train.py` | 유전 알고리즘으로 학습 |
+| `train.py` | 유전 알고리즘으로 학습 (세대 상위권은 처음 보는 판으로 다시 시험해서 진짜 잘하는 뇌만 저장) |
 | `watch.py` | 학습된 AI 보기 / AI와 대결 / 실력 측정 |
 | `plot.py` | 학습 그래프 그리기 |
 
@@ -34,6 +35,9 @@ pip install pygame numpy matplotlib
 python play.py                         # 내가 직접 플레이
 python train.py --show                 # 학습 과정을 화면으로 보기 (↑↓ 속도 조절)
 python train.py                        # 화면 없이 빠르게 학습 → results/run/
+python train.py --generations 300 --population 200 --games 6 --val-games 12 --val-top 5 --max-frames 9000
+                                       # 강하게 학습 (지금 results/run/의 AI, CPU 여러 개로 동시에 돌림)
+python train.py --init results/run/best_brain.npz --name more   # 저장된 AI에서 이어서 학습
 python watch.py                        # 학습된 AI 보기
 python watch.py --vs                   # AI(빨강) vs 나(노랑)
 python watch.py --test 20              # 처음 보는 20판으로 실력 측정

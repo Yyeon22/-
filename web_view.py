@@ -7,11 +7,14 @@ AI의 뇌(가중치)는 파이썬으로 학습시킨 results/run/best_brain.npz�
 """
 import json
 
-from brain import HIT_DIST, LOOK_AHEAD, SENSOR_OFFSETS
-from game import HEIGHT, PLAYER_H, PLAYER_SPEED, PLAYER_W, POOP_SIZE, WIDTH
+import game as G
+from brain import LOOK_AHEAD, SENSOR_OFFSETS
 
-CONSTS = dict(W=WIDTH, H=HEIGHT, PW=PLAYER_W, PH=PLAYER_H, SPEED=PLAYER_SPEED,
-              PS=POOP_SIZE, OFFSETS=SENSOR_OFFSETS, HIT=HIT_DIST, LOOK=LOOK_AHEAD)
+CONSTS = dict(W=G.WIDTH, H=G.HEIGHT, PW=G.PLAYER_W, PH=G.PLAYER_H, SPEED=G.PLAYER_SPEED,
+              OFFSETS=SENSOR_OFFSETS, LOOK=LOOK_AHEAD,
+              STAGE=G.STAGE_FRAMES, PS=G.POOP_SIZE, GROW=G.POOP_GROW, PMAX=G.POOP_MAX,
+              JITTER=G.POOP_SIZE_JITTER, SP0=G.SPAWN_START, SPSTEP=G.SPAWN_STEP, SPMIN=G.SPAWN_MIN,
+              V0=G.SPEED_START, VSTEP=G.SPEED_STEP, VRAND=G.SPEED_RANDOM)
 
 # 두 화면이 같이 쓰는 그림 그리기 코드
 COMMON = r"""
@@ -21,8 +24,7 @@ function oval(x, y, w, h, color) {
   ctx.fillStyle = color; ctx.beginPath();
   ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); ctx.fill();
 }
-function drawPoop(x, y) {
-  const s = C.PS;
+function drawPoop(x, y, s) {
   oval(x, y + s * 0.55, s, s * 0.45, '#78481e');
   oval(x + s * 0.15, y + s * 0.3, s * 0.7, s * 0.4, '#965f2d');
   oval(x + s * 0.3, y + s * 0.08, s * 0.4, s * 0.32, '#78481e');
@@ -93,14 +95,20 @@ function box(x, y, w, h) { return [Math.trunc(x), Math.trunc(y), Math.trunc(w), 
 function overlaps(a, b) { return a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3]; }
 function newPlayer() { return {x: C.W / 2 - C.PW / 2, y: C.H - C.PH - 10, alive: true, score: 0}; }
 function newGame() { return {players: vs ? [newPlayer(), newPlayer()] : [newPlayer()], poops: [], frame: 0}; }
+function stageOf(g) { return Math.floor(g.frame / C.STAGE) + 1; }
+function hitDist(size) { return ((C.PW - 12) + (size - 8)) / 2; }
 function step(g, actions) {
   g.frame++;
-  const interval = Math.max(6, 30 - Math.floor(g.frame / 300));
-  if (g.frame % interval === 0)
-    g.poops.push({x: Math.random() * (C.W - C.PS), y: -C.PS, speed: 4 + g.frame / 900 + Math.random() * 2});
+  const st = stageOf(g) - 1;          // 스테이지가 오를수록 자주, 크게, 빠르게
+  const interval = Math.max(C.SPMIN, C.SP0 - C.SPSTEP * st);
+  if (g.frame % interval === 0) {
+    const size = Math.min(C.PMAX, C.PS + C.GROW * st) * (1 - C.JITTER + Math.random() * 2 * C.JITTER);
+    g.poops.push({x: Math.random() * (C.W - size), y: -size, size,
+                  speed: C.V0 + C.VSTEP * st + Math.random() * C.VRAND});
+  }
   g.poops.forEach(p => p.y += p.speed);
   g.poops = g.poops.filter(p => p.y < C.H);
-  const boxes = g.poops.map(p => box(p.x + 4, p.y + 6, C.PS - 8, C.PS - 8));
+  const boxes = g.poops.map(p => box(p.x + 4, p.y + 6, p.size - 8, p.size - 8));
   g.players.forEach((pl, n) => {
     if (!pl.alive) return;
     if (actions[n] === 1) pl.x -= C.SPEED; else if (actions[n] === 2) pl.x += C.SPEED;
@@ -119,7 +127,7 @@ function observe(g, pl) {
     let soonest = C.LOOK;
     for (const p of g.poops) {
       if (p.y > pl.y + 10) continue;
-      if (Math.abs(p.x + C.PS / 2 - sx) < C.HIT) soonest = Math.min(soonest, Math.max(0, (pl.y - p.y) / p.speed));
+      if (Math.abs(p.x + p.size / 2 - sx) < hitDist(p.size)) soonest = Math.min(soonest, Math.max(0, (pl.y - p.y) / p.speed));
     }
     obs.push(1 - soonest / C.LOOK);
   }
@@ -135,14 +143,19 @@ function act(obs) {
 // ---- 화면과 조작 ----
 function render() {
   background();
-  game.poops.forEach(p => drawPoop(p.x, p.y));
+  game.poops.forEach(p => drawPoop(p.x, p.y, p.size));
   const ai = vs ? game.players[0] : null, me = vs ? game.players[1] : game.players[0];
   if (ai && ai.alive) { drawSensors(ai.x, ai.y, observe(game, ai).slice(1)); drawPlayer(ai.x, ai.y, '#e63c3c', 1); }
   if (me.alive) drawPlayer(me.x, me.y, '#ffc83c', 1);
-  const lines = [];
+  const lines = [`스테이지 ${stageOf(game)}`];
   if (ai) lines.push(`AI ${(ai.score / 60).toFixed(1)}초`);
   lines.push(`나 ${(me.score / 60).toFixed(1)}초`);
   hud(lines);
+  const over = game.players.every(p => !p.alive);
+  if (started && !over && game.frame >= C.STAGE && game.frame % C.STAGE < 60) {   // 스테이지가 오르면 1초간 알림
+    ctx.fillStyle = '#c81e1e'; ctx.font = 'bold 44px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(`STAGE ${stageOf(game)}!`, C.W / 2, 140); ctx.textAlign = 'left';
+  }
   if (!started) banner('클릭해서 시작', '← → 키 또는 아래 버튼으로 이동');
   else if (game.players.every(p => !p.alive)) {
     const msg = !ai ? '게임 오버' : me.score > ai.score ? '내가 이겼다!' : me.score < ai.score ? 'AI 승리!' : '무승부';
