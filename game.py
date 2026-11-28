@@ -44,8 +44,10 @@ class Player:
         self.y = HEIGHT - PLAYER_H - 10
         self.alive = True
         self.score = 0                       # 살아남은 프레임 수
+        self.last_action = STAY              # 직전에 누른 방향 (AI의 '기억' 입력용)
 
     def move(self, action):
+        self.last_action = action
         if action == LEFT:
             self.x -= PLAYER_SPEED
         elif action == RIGHT:

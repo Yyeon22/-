@@ -36,6 +36,11 @@ def main():
             gens, _, avg, _ = read_log(name)
             plt.plot(gens, avg, label=name)
     plt.axhline(RANDOM_BASELINE, ls="--", color="gray", label="Random moves")
+    oracle = os.path.join("results", "oracle.csv")
+    if os.path.exists(oracle):          # 이론적 한계는 너무 높아서 선 대신 범례에 숫자로 적는다
+        with open(oracle) as f:
+            gods = [float(r["god"]) for r in csv.DictReader(f)]
+        plt.plot([], [], " ", label=f"Perfect-foresight limit: {sum(gods) / len(gods):.0f} (oracle.py)")
     plt.xlabel("Generation")
     plt.ylabel("Survival time (frames, 60 = 1 sec)")
     plt.title("Poop Dodge AI - learning progress")
