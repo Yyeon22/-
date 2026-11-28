@@ -19,7 +19,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 
-from brain import Brain, act_many, observe_many, stack_weights
+from brain import Brain, Eye, act_many, make_offsets, observe_many, stack_weights
 from game import Game
 
 VALIDATION_SEED = 500_000   # 검증용 똥 패턴 (학습에도, watch.py --test에도 안 쓰는 판)
@@ -29,11 +29,12 @@ def play_generation(brains, game_seed, max_frames, show=None):
     """모든 뇌가 같은 게임을 한 판 하고, 각자의 점수(생존 프레임)를 돌려준다.
     살아 있는 AI 전부의 눈과 뇌를 numpy로 한꺼번에 계산해서 빠르다 (brain.observe/act와 같은 결과)."""
     game = Game(n_players=len(brains), seed=game_seed)
+    eye = brains[0].eye                              # 한 세대의 뇌는 모두 같은 눈(센서 설정)을 가진다
     stacked = stack_weights(brains)
     actions = np.zeros(len(brains), dtype=int)
     while not game.all_dead() and game.frame < max_frames:
         alive = np.array([i for i, p in enumerate(game.players) if p.alive])
-        obs = observe_many(game, [game.players[i] for i in alive])
+        obs = observe_many(game, [game.players[i] for i in alive], eye)
         actions[alive] = act_many({k: v[alive] for k, v in stacked.items()}, obs)
         game.step(actions.tolist())
         if show is not None and not show(game):
@@ -43,14 +44,14 @@ def play_generation(brains, game_seed, max_frames, show=None):
 
 def _play(job):
     """여러 CPU에서 동시에 돌리기 위한 포장 (뇌 대신 가중치를 주고받는다)"""
-    weights, seed, max_frames = job
-    return play_generation([Brain(None, w) for w in weights], seed, max_frames)
+    weights, eye, seed, max_frames = job
+    return play_generation([Brain(None, w, eye) for w in weights], seed, max_frames)
 
 
 def play_many(pool, brains, seeds, max_frames):
     """여러 판을 동시에 돌려 판마다의 점수 배열 목록을 돌려준다."""
     weights = [b.w for b in brains]
-    jobs = [(weights, s, max_frames) for s in seeds]
+    jobs = [(weights, brains[0].eye, s, max_frames) for s in seeds]
     return list(pool.map(_play, jobs)) if pool else [_play(j) for j in jobs]
 
 
@@ -133,6 +134,15 @@ def main():
                     help="세대 상위권을 처음 보는 몇 판으로 다시 시험해서 저장할 뇌를 고를지 (운 좋은 뇌 거르기)")
     ap.add_argument("--val-top", type=int, default=3, help="세대마다 검증 시험을 볼 상위 몇 명")
     ap.add_argument("--workers", type=int, default=0, help="동시에 돌릴 CPU 수 (0 = 자동)")
+    ap.add_argument("--sensors", type=int, default=9, help="AI 눈(센서) 개수")
+    ap.add_argument("--spacing", type=int, default=30, help="센서 사이 간격 픽셀 (9개×30 = 좌우 ±120px)")
+    ap.add_argument("--look", type=int, default=60, help="몇 프레임 뒤까지 내다볼지")
+    ap.add_argument("--hidden", type=int, default=12, help="은닉층 뉴런 수")
+    ap.add_argument("--soft", type=int, default=15,
+                    help="부드러운 센서: 똥 경계 ±몇 px에서 위험도가 서서히 변할지 (0 = 옛날 딱딱한 센서)")
+    ap.add_argument("--no-memory", action="store_true", help="직전 행동을 입력으로 주지 않기 (옛날 방식)")
+    ap.add_argument("--snapshots", default="1,5,20,50,100,300",
+                    help="이 세대들의 최고 뇌를 gen_XXXX.npz로 저장 (웹 'AI 성장 레이스'용)")
     ap.add_argument("--init", help="이 뇌(.npz)에서 이어서 학습 (예: results/run/best_brain.npz)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--name", default="run", help="결과 폴더 이름 (results/이름)")
@@ -156,7 +166,10 @@ def main():
             child.mutate(rng, args.mutation_rate)
             brains.append(child)
     else:
-        brains = [Brain(rng) for _ in range(args.population)]
+        eye = Eye(make_offsets(args.sensors, args.spacing), args.look, args.soft, not args.no_memory)
+        brains = [Brain(rng, eye=eye, n_hidden=args.hidden) for _ in range(args.population)]
+    print("AI:", brains[0].describe(), flush=True)
+    snapshots = {int(s) for s in args.snapshots.split(",") if s.strip().isdigit()}
 
     val_seeds = [VALIDATION_SEED + i for i in range(args.val_games)]
     best_val, log = -1.0, []
@@ -175,9 +188,12 @@ def main():
             # 상위권만 '처음 보는 판'으로 다시 시험 → 진짜 실력이 제일 좋은 뇌를 저장
             top = list(np.argsort(fitness)[::-1][:args.val_top])
             val = np.mean(play_many(pool, [brains[i] for i in top], val_seeds, args.max_frames), axis=0)
+            gen_best = brains[top[int(np.argmax(val))]]
             if val.max() > best_val:
                 best_val = float(val.max())
-                brains[top[int(np.argmax(val))]].save(os.path.join(out_dir, "best_brain.npz"))
+                gen_best.save(os.path.join(out_dir, "best_brain.npz"))
+            if gen in snapshots:
+                gen_best.save(os.path.join(out_dir, f"gen_{gen:04d}.npz"))
             if view_state:
                 view_state["best_ever"] = int(best_val)
 
